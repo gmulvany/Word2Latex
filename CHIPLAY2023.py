@@ -19,33 +19,12 @@ from lxml import etree
 from xml.etree.ElementTree import QName
 
 # DEFINE GLOBALS *******************************
-login_email = "gerardmulvany@gmail.com"
-ol_project_name = "Metaverse For Theatre"
-use_cookie = True
+current_directory = os.getcwd()                                                                         
+doc_path = current_directory 
 
-current_directory = os.getcwd()
-                                                                         
-doc_path = current_directory #os.path.join(current_directory, "Chapters") #current_directory + "\Chapters\\"
-#tex_path = current_directory + "\LaTex\Chapters\\"
-
-number_of_chapters = 5
-
-chap_names = {
-                            1: r"\chapter{Introduction}\label{introduction}",
-                            2: r"\chapter{Background \& Related Work}\label{background-and-related-work}",
-                            3: r"\chapter{Methodology}\label{methodology}",
-                            4: r"\chapter{Case Study 1: Because the Night}\label{because-the-night}",
-                            5: r"\chapter{Case Study 2: Under the Skin}\label{under-the-skin}",
-                        }
-
-          
-#if not os.path.exists(tex_path):
-#    os.makedirs(tex_path)
-#    print("LaTex folder created")
-
+      
 def generate_tex(input_file):
 
-    #update docx for current chapter number
     doc_file = input_file
     tex_file = input_file + ".tex"
 
@@ -128,20 +107,7 @@ def manual_fixes(input_file):
       except Exception as e:
             print("Remove empty captions failed:", e)
 
-      #remove empty crossreferences
-      #for r in crossrefs:
-      #      if r =="":
-      #            captions.remove(r)
-
-      #try:
-      #      add_line_above_pattern(tex_file, r'\\includegraphics.*', r"\\centering")
-      #      result = True
-      #except:
-      #      print("Error adding \\centering")
-      #try:
-      #      add_line_above_first_line(tex_file, chap_names[input_file])      
-      #except Exception as e:
-      #      print("Failed to add Chapter Title:", e)
+      
       try:
             for name in image_names:
                   i = image_names.index(name)
