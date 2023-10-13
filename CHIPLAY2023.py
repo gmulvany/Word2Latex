@@ -88,8 +88,6 @@ def manual_fixes(input_file):
           
 
       pattern = r'^\\includegraphics\[width=.*in,height=.*in\]{'
-      #captions = ["",""]
-      #crossrefs = ["",""]
       try:
             captions = find_text_with_style(doc_file, "Caption")
       except Exception as e:
@@ -196,13 +194,13 @@ def manual_fixes(input_file):
             replace_crossreferences(tex_file)
       except Exception as e:
             print("Replace captions failed:", e)
-      #for ref in crossrefs:
-      #      try:
-      #            ref_search = r"\emph{\textbf{\ul{" + "ref" + "}}}"
-      #            ref_replacement = r"\ref{" + ref + "}"
-      #            find_and_replace(tex_file, ref_search, ref_replacement)
-      #      except Exception as e:
-      #            print("Failed correcting crossref:", e)
+      for ref in crossrefs:
+           try:
+                 ref_search = r"\emph{\textbf{\ul{" + "ref" + "}}}"
+                 ref_replacement = r"\ref{" + ref + "}"
+                 find_and_replace(tex_file, ref_search, ref_replacement)
+           except Exception as e:
+                 print("Failed correcting crossref:", e)
 
       return result
 
