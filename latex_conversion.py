@@ -4,16 +4,9 @@ import tempfile
 from tkinter.font import BOLD
 import pypandoc 
 import re
-import http.cookiejar
 from docx import Document
-from olsync import olclient, olbrowserlogin
-from lxml import etree      
-import time
+from lxml import etree
 from xml.etree.ElementTree import QName
-from docxcompose.composer import Composer
-from docx.shared import Pt
-from docx.oxml.ns import qn
-from docx.enum.text import WD_UNDERLINE
 
 
 ####################### GLOBAL PROPERTIES ############################
@@ -1158,7 +1151,7 @@ def get_docx_files(directory):
     return docx_files
 
 #***************** RUN FULL CONVERSION *********************************
-#Pre convert locally for all chapters
+#Pre convert locally for all files in current folder
 docx_files = get_docx_files(current_directory)
 
 for d in docx_files:
