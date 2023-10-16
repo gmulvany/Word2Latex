@@ -1,0 +1,30 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"aink",
+			"biblatex",
+			"citeproc",
+			"crossrefs",
+			"fignos",
+			"includegraphics",
+			"lxml",
+			"Mulvany",
+			"outputfile",
+			"Pandoc",
+			"pypandoc",
+			"raggedright",
+			"rels",
+			"reltype",
+			"sdtdh",
+			"subdoc",
+			"textbf",
+			"textit",
+			"textwidth"
+		]
+	}
+}
