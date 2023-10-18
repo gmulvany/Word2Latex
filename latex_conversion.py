@@ -125,6 +125,10 @@ def manual_fixes(input_file):
 	for name in image_names:
 		i = image_names.index(name)
 		print(yellow, f"Progress: {i}/{len(image_names)}", reset, end='\r')
+		if use_apa_figure_style:
+			make_apa7_figure(name, i, tex_file, subdoc_captions)
+		
+		
 		delimiter = "Note."
 		before_note = ""
 		#search_pattern = before_note.encode('utf-8', 'escape')
@@ -143,13 +147,13 @@ def manual_fixes(input_file):
 			print(bold_red, "Error changing to \\end{figure}", reset)
 			had_error = True
 
-		try:
+		try: #Get OS path for image
 			name = os.path.basename(name)
 		except Exception as e:
 			print(bold_red, "ERROR: Failed to get OS path for Image: ", name, "   Error is:", e, reset)
 			had_error = True
 
-		try:
+		try: #replace figure 'begin' environment
 			replace_line_with_pattern(tex_file, r"\\begin{fignos:no-prefix-figure-caption}", r"\begin{figure}")
 			result = True
 		except Exception as e:
@@ -165,6 +169,7 @@ def manual_fixes(input_file):
 		except Exception as e:
 			print(bold_red, "Error adjusting \\includegraphics: ", e, reset)
 			had_error = True
+
 		if replace_video_links:
 			create_video_icons(tex_file)
 		try:          
@@ -235,6 +240,136 @@ def manual_fixes(input_file):
 	if len(image_names) == 0 and had_error == False:
 		return True
 	return result
+
+def make_apa7_figure(name, i, tex_file, subdoc_captions):
+	delimiter = "Note."
+	before_note = ""
+	#search_pattern = before_note.encode('utf-8', 'escape')
+	after_note = ""
+	end_search = ""
+	saved_note = ""
+	has_note = False
+	latex_caption = ""
+	cap_search = ""
+	search_pattern = b""
+	pattern = r'^\\includegraphics\[width=.*in,height=.*in\]{'
+
+	try : #Remove old end figure command
+		replace_line_with_pattern(tex_file, r"\\end{fignos:no-prefix-figure-caption}", "")
+		result = True
+	except:
+		print(bold_red, "Error changing to \\end{figure}", reset)
+		had_error = True
+
+	try: #Get OS path for image
+		name = os.path.basename(name)
+	except Exception as e:
+		print(bold_red, "ERROR: Failed to get OS path for Image: ", name, "   Error is:", e, reset)
+		had_error = True
+
+	try: #replace figure 'begin' environment
+		replace_line_with_pattern(tex_file, r"\\begin{fignos:no-prefix-figure-caption}", r"\begin{figure}")
+		result = True
+	except Exception as e:
+		print(bold_red, "Error changing \\begin{figure} WITH ERROR:", e, reset)
+		had_error = True
+
+	label_name, *_ = name.split(".")
+	label_name = r"    \label{fig:" + label_name + "}"
+	replacement = "    \\includegraphics[width=\\textwidth]{" + "Figures/" + name + "}"
+	try:#Make figures text width and add image filepath
+		replace_line_with_pattern(tex_file, pattern, replacement)
+		result = True    
+	except Exception as e:
+		print(bold_red, "Error adjusting \\includegraphics: ", e, reset)
+		had_error = True
+		
+	if replace_video_links:
+		create_video_icons(tex_file)
+	try:          
+
+		latex_caption = pypandoc.convert_file(subdoc_captions[i], to_format, input_format, extra_args=extra_args)
+		latex_caption = replace_caption_cross_references(latex_caption)
+		if delimiter in latex_caption:
+			before_note, after_note = latex_caption.split(delimiter, 1)
+			before_note = r"    \caption{" + before_note + "}"
+
+			after_note = r"\textit{" + delimiter + " }" + after_note.strip() # Include the delimiter in the "after_note" string
+			after_note = r"" + after_note
+			
+			after_note = "    " + r"    \raggedright{\small{" + after_note + "}}"
+			#search_pattern = get_first_4_words(latex_caption)
+			search_pattern = truncate_and_encode(latex_caption, 50)
+			saved_note = replace_line_with_pattern(tex_file, search_pattern, after_note, True) #Replace the original under-image caption with only the "after-note" section
+			has_note = True
+		else:
+			before_note = r"" + latex_caption
+			before_note = before_note.strip()
+			before_note = r"    \caption{" + before_note + "}"
+			caption_replacement = ""
+			#search_pattern = get_first_4_words(latex_caption)
+			search_pattern = truncate_and_encode(latex_caption, 50)
+			replace_line_with_pattern(tex_file, search_pattern, caption_replacement) #Delete original caption that was under the image
+			has_note = False
+
+		add_new_line_of_text_above_word(tex_file, replacement, before_note) #Add the figure title/short caption above image
+		result = True
+	except Exception as e:
+		print(bold_red, "Failed to correct caption:", e, reset)
+		had_error = True
+	try:      
+		cap_search =r"\\caption{" + search_pattern.decode("utf-8", 'ignore')  #Ignore unbound 
+		#time.sleep(0.1)
+		#add_line_below_pattern(tex_file, cap_search, label_name) #Add a label for cross-referencing
+		add_new_line_of_text_above_word(tex_file, replacement, label_name)
+		
+		result = True
+	except Exception as e:
+		print(bold_red, "Error adding label:", e, reset)
+		had_error = True
+	try:
+		if cap_search != "":
+			#add_line_below_pattern(tex_file, cap_search, r"    \centering") #Centre the image
+			add_new_line_of_text_above_word(tex_file, label_name, r"    \centering")
+	except Exception as e:
+		print(bold_red, "Error adding centering cmd:", e, reset)
+	try: 
+		if has_note:
+			end_search =  saved_note
+		else:
+			end_search = replacement 
+		add_new_line_of_text_below_word(tex_file, end_search, r"\end{figure}") #Close the figure environment
+		result = True
+	except Exception as e:
+		print(bold_red, "Error adding \\end{Figure} line:", e, reset)
+		had_error = True
+
+def make_acm_figure(name, i, tex_file, subdoc_captions):
+	saved_note = ""
+	pattern = r'^\\includegraphics\[width=.*in,height=.*in\]{'
+	try :
+		replace_line_with_pattern(tex_file, r"\\end{fignos:no-prefix-figure-caption}", "")
+		had_error = True
+	except Exception as e:
+		print(bold_red, e, reset)
+	label_name, *_ = name.split(".")
+	label_name = r"    \label{fig:" + label_name + "}"
+	replacement = "    \\includegraphics[width=\\textwidth]{" + "Figures/" + name + "}"
+	try:#Make figures text width and add image filepath
+		replace_line_with_pattern(tex_file, pattern, replacement)
+		had_error = True    
+	except Exception as e:
+		print(bold_red, "Error adjusting \\includegraphics: ", e, reset)
+		had_error = True
+		
+	latex_caption = pypandoc.convert_file(subdoc_captions[i], to_format, input_format, extra_args=extra_args)
+	latex_caption = replace_caption_cross_references(latex_caption)
+	latex_caption = r"    \caption{" + latex_caption + "}"
+	add_new_line_of_text_above_word(tex_file, latex_caption, label_name)
+	search_pattern = truncate_and_encode(latex_caption, 50)
+	saved_note = replace_line_with_pattern(tex_file, search_pattern, latex_caption, True) #Replace the original under-image caption with only the "after-note" section
+	add_new_line_of_text_below_word(tex_file, saved_note, r"\end{figure}") #Close the figure environment
+
 
 def create_video_icons(tex_file):
 	try:
