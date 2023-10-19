@@ -7,7 +7,7 @@ import re
 from docx import Document
 from lxml import etree
 from xml.etree.ElementTree import QName
-
+from docx.opc.constants import RELATIONSHIP_TYPE
 
 ####################### GLOBAL PROPERTIES ############################
 replace_video_links = False
@@ -36,6 +36,41 @@ extra_args = [
 			   './','--verbose']
 to_format = 'tex'
 input_format = 'docx+citations'
+
+namespaces = {
+			'wpc': 'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
+			'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+			'cx': 'http://schemas.microsoft.com/office/drawing/2014/chartex',
+			'cx1': 'http://schemas.microsoft.com/office/drawing/2015/9/8/chartex',
+			'cx2': 'http://schemas.microsoft.com/office/drawing/2015/10/21/chartex',
+			'cx3': 'http://schemas.microsoft.com/office/drawing/2016/5/9/chartex',
+			'cx4': 'http://schemas.microsoft.com/office/drawing/2016/5/10/chartex',
+			'cx5': 'http://schemas.microsoft.com/office/drawing/2016/5/11/chartex',
+			'cx6': 'http://schemas.microsoft.com/office/drawing/2016/5/12/chartex',
+			'cx7': 'http://schemas.microsoft.com/office/drawing/2016/5/13/chartex',
+			'cx8': 'http://schemas.microsoft.com/office/drawing/2016/5/14/chartex',
+			'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+			'aink': 'http://schemas.microsoft.com/office/drawing/2016/ink',
+			'am3d': 'http://schemas.micro...17/model3d',
+			'o': 'urn:schemas-microsoft-com:office:office',
+			'oel': 'http://schemas.microsoft.com/office/2019/extlst',
+			'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+			'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+			'v': 'urn:schemas-microsoft-com:vml',
+			'wp14': 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing',
+			'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+			'w10': 'urn:schemas-microsoft-com:office:word',
+			'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+			'w14': 'http://schemas.microsoft.com/office/word/2010/wordml',
+			'w15': 'http://schemas.microsoft.com/office/word/2012/wordml',
+			'w16cex': 'http://schemas.microsoft.com/office/word/2018/wordml/cex',
+			'w16cid': 'http://schemas.microsoft.com/office/word/2016/wordml/cid',
+			'w16': 'http://schemas.microsoft.com/office/word/2018/wordml',
+			'w16du': 'http://schemas.microsoft.com/office/word/2023/wordml/word16du',
+			'w16sdtdh': 'http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash',
+			'w16se': 'http://schemas.microsoft.com/office/word/2015/wordml/symex',
+			'wpg': 'http://schemas.microsoft.com/office/',
+			'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'}
 
 acm_preamble = [
 r'%%',
@@ -191,7 +226,7 @@ def manual_fixes(input_file):
 	had_error = False
 	pattern = r'^\\includegraphics\[width=.*in,height=.*in\]{'
 	try:
-		image_names = get_original_image_names(doc_file)    
+		image_names, image_alts = get_original_image_names(doc_file)
 	except Exception as e:
 		print(bold_red, "Failed to find image names:", e, reset)
 		had_error = True
@@ -226,9 +261,10 @@ def manual_fixes(input_file):
 		had_error = True
 	for name in image_names:
 		i = image_names.index(name)
+		description = image_alts[i]
 		print(yellow, f"Progress: {i}/{len(image_names)}", reset, end='\r')
 		if use_apa_figure_style:
-			make_acm_figure(name, i, tex_file, subdoc_captions)
+			make_acm_figure(name, i, tex_file, subdoc_captions, description)
 	try:
 		replace_cross_references(tex_file) #Run the function that replaces cross refs based on style with LATEX version
 	except Exception as e:
@@ -240,13 +276,15 @@ def manual_fixes(input_file):
 	result = not had_error
 	return result
 
-def make_acm_figure(name, i, tex_file, subdoc_captions):
+def make_acm_figure(name, i, tex_file, subdoc_captions, description):
 	saved_note = ""
 	try :
 		replace_line_with_pattern(tex_file, r"\\end{fignos:no-prefix-figure-caption}", "")
+		replace_line_with_pattern(tex_file, r"\\begin{fignos:no-prefix-figure-caption}", r"\begin{figure}")
 	except Exception as e:
 		print(bold_red, e, reset)
 		return False
+	description = r"    \Description{" + description + "}"
 	name = os.path.basename(name)
 	label_name, *_ = name.split(".")
 	label_name = r"    \label{fig:" + label_name + "}"
@@ -268,7 +306,8 @@ def make_acm_figure(name, i, tex_file, subdoc_captions):
 	add_new_line_of_text_below_word(tex_file, replacement, latex_caption)
 	add_new_line_of_text_above_word(tex_file, replacement, r"    \centering")
 	add_new_line_of_text_below_word(tex_file, latex_caption, label_name)
-	add_new_line_of_text_below_word(tex_file, label_name, r"\end{figure}") #Close the figure environment
+	add_new_line_of_text_below_word(tex_file, label_name, description) #Add ALT text description for accessability
+	add_new_line_of_text_below_word(tex_file, description, r"\end{figure}") #Close the figure environment
 	return True
 
 
@@ -302,30 +341,57 @@ def update_file_number(chapter_number, extension):
 def get_original_image_names(docx_file):
 	doc = Document(docx_file)
 	image_names = []
+	image_alts = []
 	refs = []
 	ordered_images = []
 	all_rids = []
+	word_folder = docx_file.replace('.docx', '').replace('.doc', '_files')
 
+	# try:
+	# 	for rel in doc.part.rels.values():
+	# 		if "image" in rel.reltype:
+	# 			try:
+	# 				image_name = rel._target.split("/")[-1]
+	# 				image_name = r"" + image_name
+	# 				image_names.append(image_name)
+	# 				ref = rel.rId 
+	# 				#print(ref)
+	# 				refs.append(ref)
+	# 				target_part = doc.part.rels[rel].target_part
+	# 				try:
+	# 					image_xml = target_part.blob
+	# 					root = etree.fromstring(image_xml)
+	# 					description = root.find(".//pic:pic/pic:nvPicPr/pic:cNvPr", namespaces=namespaces).get('descr')
+	# 					image_alts.append(description)
+	# 				except Exception as e:
+	# 					description = "No Description"
+	# 			except:
+	# 				pass
 	try:
-		for rel in doc.part.rels.values():
-			if "image" in rel.reltype:
+		for rel in doc.part.rels:
+			if "image" in doc.part.rels[rel].target_ref:
+				target_part = doc.part.rels[rel].target_part
 				try:
-					image_name = rel._target.split("/")[-1]
+					if target_part.content_type.startswith("image/"):
+						image_name = rel
+						next_rId = increment_rId(rel)
+					for val in doc.part.rels.values():
+						if "image" in val.reltype and val.rId == next_rId:
+								image_name = val._target.split("/")[-1]
 					image_name = r"" + image_name
 					image_names.append(image_name)
-					ref = rel.rId 
+					ref = next_rId 
 					#print(ref)
 					refs.append(ref)
+					main_document_xml = doc.part.blob
+					root = etree.fromstring(main_document_xml)
+					search = ".//a:blip[@r:embed='{}']".format(rel)
+					pic_elem = root.find(search, namespaces=namespaces)
+					if pic_elem is not None:
+						description = root.find(".//pic:pic/pic:nvPicPr/pic:cNvPr", namespaces=namespaces).get('descr')
+						image_alts.append(description)
+
 				except:
-					try:
-						image_name = rel._target.split("\\")[-1]
-						image_name = r"" + image_name
-						image_names.append(image_name)
-						ref = rel.rId 
-						#print(ref)
-						refs.append(ref)
-					except:
-						pass
 					pass
 	except Exception as e:
 		print(bold_red, "rel.values failed:", e, reset)
@@ -345,9 +411,10 @@ def get_original_image_names(docx_file):
 	#reordered_rids = sorted(refs, key=lambda x: all_rids.index(x))
 	try:
 		ordered_images = [c for _, c in sorted(zip(refs, image_names), key=lambda x: all_rids.index(x[0]))]
+		ordered_descriptions = [c for _, c in sorted(zip(refs, image_alts), key=lambda x: all_rids.index(x[0]))]
 	except Exception as e:
 		print(bold_red, "order_images Failed:", e, reset)
-	return ordered_images
+	return ordered_images, ordered_descriptions
 
 def remove_trailing_whitespace(string):
 	return string.rstrip()
@@ -356,6 +423,22 @@ def get_first_4_words(string):
 	words = string.split()
 	first_4_words = words[:4]
 	return ' '.join(first_4_words)
+
+def increment_rId(rId_str, increment=1):
+    # Use regular expressions to find the number part of the string
+    match = re.search(r'\d+$', rId_str)
+
+    if match:
+        # Extract the number from the matched group
+        number = int(match.group())
+        # Increment the number
+        new_number = number + increment
+        # Replace the number in the original string with the incremented number
+        return re.sub(r'\d+$', str(new_number), rId_str)
+
+    # If no number was found, return the original string
+    return rId_str
+
 
 def get_last_4_words(string):
 	words = string.split()
@@ -518,7 +601,6 @@ def get_rid_order(docx_file):
    # xml_string = document_part.part.blob.decode('utf-8')
 	root = None
 	drawing_elements = []
-	namespaces = {}
 	try:
 		# Parse the document XML using lxml
 		root = etree.fromstring(doc.part.blob, parser=None)
@@ -527,39 +609,7 @@ def get_rid_order(docx_file):
 
 	try:
 	# Register the 'w' namespace prefix
-		namespaces = {
-			'wpc': 'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
-			'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-			'cx': 'http://schemas.microsoft.com/office/drawing/2014/chartex',
-			'cx1': 'http://schemas.microsoft.com/office/drawing/2015/9/8/chartex',
-			'cx2': 'http://schemas.microsoft.com/office/drawing/2015/10/21/chartex',
-			'cx3': 'http://schemas.microsoft.com/office/drawing/2016/5/9/chartex',
-			'cx4': 'http://schemas.microsoft.com/office/drawing/2016/5/10/chartex',
-			'cx5': 'http://schemas.microsoft.com/office/drawing/2016/5/11/chartex',
-			'cx6': 'http://schemas.microsoft.com/office/drawing/2016/5/12/chartex',
-			'cx7': 'http://schemas.microsoft.com/office/drawing/2016/5/13/chartex',
-			'cx8': 'http://schemas.microsoft.com/office/drawing/2016/5/14/chartex',
-			'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
-			'aink': 'http://schemas.microsoft.com/office/drawing/2016/ink',
-			'am3d': 'http://schemas.micro...17/model3d',
-			'o': 'urn:schemas-microsoft-com:office:office',
-			'oel': 'http://schemas.microsoft.com/office/2019/extlst',
-			'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-			'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
-			'v': 'urn:schemas-microsoft-com:vml',
-			'wp14': 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing',
-			'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-			'w10': 'urn:schemas-microsoft-com:office:word',
-			'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-			'w14': 'http://schemas.microsoft.com/office/word/2010/wordml',
-			'w15': 'http://schemas.microsoft.com/office/word/2012/wordml',
-			'w16cex': 'http://schemas.microsoft.com/office/word/2018/wordml/cex',
-			'w16cid': 'http://schemas.microsoft.com/office/word/2016/wordml/cid',
-			'w16': 'http://schemas.microsoft.com/office/word/2018/wordml',
-			'w16du': 'http://schemas.microsoft.com/office/word/2023/wordml/word16du',
-			'w16sdtdh': 'http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash',
-			'w16se': 'http://schemas.microsoft.com/office/word/2015/wordml/symex',
-			'wpg': 'http://schemas.microsoft.com/office/' }
+
 
 			
 		# Find all w:drawing elements in the document.xml
