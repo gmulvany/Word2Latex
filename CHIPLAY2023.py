@@ -207,50 +207,6 @@ def manual_fixes(input_file):
 
 
 
-def connect_to_overleaf():
-      if use_cookie:
-            # Create a CookieJar object
-            cookie_jar = http.cookiejar.CookieJar()
-
-            # Load the cookie from a file
-            cookie_file = r"E:\Code\LaTexConversion\LaTexConversion\LaTexConversion\.olauth"
-            try:
-                  pass#http.cookiejar.CookieJar.
-            except Exception as e:
-                  print("Failed to Load cookie:", e)
-
-            session =   {
-                            "cookie": cookie_file,
-                            "csrf": "token123"
-                        }
-      else:
-            session = olbrowserlogin.login()
-       
-      if session is not None:
-            client = olclient.OverleafClient(session["cookie"], session["csrf"])
-
-            try:
-                  #project= client.get_project(ol_project_name)
-                  projects = client.all_projects()
-                  print(projects)
-            except Exception as e:
-                  print("Error with acessing projects:", e)
-
-            try:
-                  project= client.get_project(ol_project_name)
-            except Exception as e:
-                  print("Error getting single project", e)
-      else:
-            print("Error with Overleaf Login")
-      return overleaf_project
-
-
-
-def sync_chapter_to_overleaf(project_ref, chapter_num):                  
-      new_tex = update_file_number(chapter_num, ".tex")
-      old_tex = "Chapter" + chapter_num + ".tex"
-      project_ref.update_file(old_tex, new_tex)  
-
 
 def update_file_number(chapter_number, extension):
        file = os.path.join(doc_path, 'Chapter')
