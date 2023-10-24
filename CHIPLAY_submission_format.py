@@ -1,4 +1,8 @@
-﻿# By Gerard Mulvany
+﻿"""
+A script to convert word documents 
+with citations and figures into Latex format
+By Gerard Mulvany
+"""
 import os
 import datetime
 import tempfile
@@ -14,7 +18,6 @@ REPLACE_VIDEO_LINKS = False
 USE_APA_FIGURE_STYLE = True
 
 current_directory = os.getcwd()
-
 doc_path = current_directory
 CUSTOM_TEMPLATE = "custom_template.latex"
 # ANSI escape codes for console red text
@@ -212,7 +215,7 @@ title_commands = [
     r"%% information and builds the first part of the formatted document.",
     r"\maketitle",
 ]
-####################################### MAIN FUNCTIONS ################################################################
+########################## MAIN FUNCTIONS #############################
 
 
 def generate_tex(input_file):
@@ -222,8 +225,8 @@ def generate_tex(input_file):
         doc_file = input_file
         tex_file = input_file.replace(".docx", "")
         tex_file = tex_file + ".tex"
-    except Exception as e:
-        print(BOLD_RED, "Error: Find document failed :", e, RESET)
+    except SyntaxError as gen_error:
+        print(BOLD_RED, "Error: Find document failed :", gen_error, RESET)
         return False
 
     if not os.path.exists(doc_file):
@@ -237,11 +240,11 @@ def generate_tex(input_file):
                 try:
                     fixes_result = manual_fixes(input_file)
                     return fixes_result
-                except Exception as e:
-                    print(BOLD_RED, "Error: Manual Fixes failed:", e, RESET)
-        except Exception as e:
+                except SyntaxError as proc_error:
+                    print(BOLD_RED, "Error: Manual Fixes failed:", proc_error, RESET)
+        except SyntaxError as docx_error:
             print(
-                BOLD_RED, "Error: Attempted but failed to convert document:", e, RESET
+                BOLD_RED, "Error: Attempted but failed to convert document:",docx_error, RESET
             )
     return False
 
@@ -257,8 +260,8 @@ def convert_docx_to_tex(input_file, output_file):
             extra_args=extra_args,
         )
         return True
-    except Exception as e:
-        print(BOLD_RED, "Pandoc ERROR:", str(e), RESET)
+    except SyntaxError as con_error:
+        print(BOLD_RED, "Pandoc ERROR:", str(con_error), RESET)
         return False
 
 
@@ -275,54 +278,45 @@ def manual_fixes(input_file):
     had_error = False
     try:
         image_names, image_alts = get_original_image_names(doc_file)
-    except Exception as e:
-        print(BOLD_RED, "Failed to find image names:", e, RESET)
+    except SyntaxError as img_error:
+        print(BOLD_RED, "Failed to find image names:", img_error, RESET)
         had_error = True
-        # Copy each caption for figures into their own temporary docx so they can be individually pandoc converted and cross-references can be linked
+        # Copy each caption for figures into their own temporary docx so
+        # they can be individually pandoc converted and cross-references can be linked
     try:
         subdoc_captions = extract_paragraphs_by_style(doc_file, "Caption")
-        #subdoc_tablecaps = extract_paragraphs_by_style(doc_file, "Table Caption")
-    except Exception as e:
-        print(BOLD_RED, "Failed to find captions by style:", e, RESET)
+        #subdoc_table_caps = extract_paragraphs_by_style(doc_file, "Table Caption")
+    except SyntaxError as subdoc_error:
+        print(BOLD_RED, "Failed to find captions by style:", subdoc_error, RESET)
         had_error = True
-
     try:  # Get TITLE
         title_text = ""
         title_texts = find_text_with_style(doc_file, "Title")
-        if title_texts.__len__() == 1:
+        if len(title_texts) == 1:
             title_text = r"\title{" + title_texts[0] + "}"
-    except Exception as e:
-        print(YELLOW, "No Title or error with title", RESET)
-
+    except SyntaxError:
+        print(YELLOW, "No Title or error with title:", RESET)
     try:  # Get Abstract
         abstract_text = ""
         abstract_texts = []
         abstract_texts = extract_paragraphs_by_style(doc_file, "Abstract")
-        if abstract_texts.__len__() == 1:
+        if len(abstract_texts) == 1:
             abstract_text = pypandoc.convert_file(
                 abstract_texts[0], TO_FORMAT, INPUT_FORMAT, extra_args=extra_args
             )
             abstract_text = abstract_text.encode("unicode-escape").decode("utf-8")
             abstract_text = abstract_text.replace("\\r", "").replace("\\n", "")
-    except Exception as e:
-        print(YELLOW, "No Title or error with title", RESET)
-
-    # try:
-    #     crossrefs = find_text_with_style(doc_file, "CrossReference")
-    # except Exception as e:
-    #     print(BOLD_RED, "Failed to find cross-references by style:", e, RESET)
-    #     had_error = True
-
+    except NameError:
+        print(YELLOW, "No abstract or text using abstract style", RESET)
     try:  # remove empty captions
-        for c in captions:
+        for c in captions.copy():
             if c == "":
                 print(YELLOW, "Warning: Removed empty caption", RESET)
                 had_error = True
                 captions.remove(c)
-    except Exception as e:
-        print(BOLD_RED, "Remove empty captions failed:", e, RESET)
+    except IndexError as cap_remove_error:
+        print(BOLD_RED, "Remove empty captions failed:", cap_remove_error, RESET)
         had_error = True
-
     # Console line to inform
     print(GREEN, "Number of Images = ", len(image_names))
     print(GREEN, "Number of Captions = ", len(subdoc_captions), RESET)
@@ -339,8 +333,8 @@ def manual_fixes(input_file):
         replace_cross_references(
             tex_file
         )  # Run the function that replaces cross refs based on style with LATEX version
-    except Exception as e:
-        print(BOLD_RED, "Replace captions failed:", e, RESET)
+    except IndexError as cap_cross_error:
+        print(BOLD_RED, "Replace captions failed:", cap_cross_error, RESET)
         had_error = True
 
     for line in reversed(title_commands):
@@ -349,109 +343,109 @@ def manual_fixes(input_file):
     add_line_above_first_line(tex_file, title_text)
     for line in reversed(acm_preamble):
         add_line_above_first_line(tex_file, line)
-
     add_line_below_last_line(tex_file, "")
     add_line_below_last_line(tex_file, "")
     add_line_below_last_line(tex_file, r"\end{document}")
     add_line_below_last_line(tex_file, r"\endinput")
-
     current_year = datetime.datetime.now().year
     replace_line_with_pattern(
-        tex_file, "\\acmYear{", r"\acmYear{" + current_year.__str__() + "}"
+        tex_file, "\\acmYear{", r"\acmYear{" + str(current_year) + "}"
     )
     replace_line_with_pattern(
-        tex_file, "copyrightyear{", "\\copyrightyear{" + current_year.__str__() + "}"
+        tex_file, "copyrightyear{", "\\copyrightyear{" + str(current_year) + "}"
     )
-
     all_author_info = get_author_info()
     add_line_below_pattern(tex_file, r"of authors' names for this purpose.", "}")
     for author in reversed(all_author_info):
-        if author["postcode"].__str__() != "nan":
+        if str(author["postcode"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \postcode{" + author["postcode"].__str__() + "}",
+                r"    \postcode{" + str(author["postcode"]) + "}",
             )
-        if author["country"].__str__() != "nan":
+        if str(author["country"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \country{" + author["country"].__str__() + "}",
+                r"    \country{" + str(author["country"]) + "}",
             )
-        if author["state"].__str__() != "nan":
+        if str(author["state"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \state{" + author["state"].__str__() + "}",
+                r"    \state{" + str(author["state"]) + "}",
             )
-        if author["city"].__str__() != "nan":
+        if str(author["city"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \city{" + author["city"].__str__() + "}",
+                r"    \city{" + str(author["city"]) + "}",
             )
-        if author["street"].__str__() != "nan":
+        if str(author["street"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \streetaddress{" + author["street"].__str__() + "}",
+                r"    \streetaddress{" + str(author["street"]) + "}",
             )
         if author["institution"] != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"    \institution{" + author["institution"].__str__() + "}",
+                r"    \institution{" + str(author["institution"]) + "}",
             )
         add_line_below_pattern(
             tex_file, r"of authors' names for this purpose.", r"\affiliation{%"
         )
-        if author["email"].__str__() != "nan":
+        if str(author["email"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"\email{" + author["email"].__str__() + "}",
+                r"\email{" + str(author["email"]) + "}",
             )
-        if author["mark"].__str__() != "nan":
+        if str(author["mark"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"\authornotemark{" + author["mark"].__str__() + "}",
+                r"\authornotemark{" + str(author["mark"]) + "}",
             )
-        if author["orcid"].__str__() != "nan":
+        if str(author["orcid"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"\orcid{" + author["orcid"].__str__() + "}",
+                r"\orcid{" + str(author["orcid"]) + "}",
             )
-        if author["note"].__str__() != "nan":
+        if str(author["note"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"\authornote{" + author["note"].__str__() + "}",
+                r"\authornote{" + str(author["note"]) + "}",
             )
-        if author["name"].__str__() != "nan":
+        if str(author["name"]) != "nan":
             add_line_below_pattern(
                 tex_file,
                 r"of authors' names for this purpose.",
-                r"\author{" + author["name"].__str__() + "}",
+                r"\author{" + str(author["name"]) + "}",
             )
-
-    if abstract_texts.__len__() == 1:
+    if len(abstract_texts) == 1:
         # add_line_below_pattern(tex_file, r"\begin{abstract}", abstract_text)
         add_new_line_of_text_below_word(tex_file, r"\begin{abstract}", abstract_text)
-
-    if len(image_names) == 0 and had_error == False:
+    if len(image_names) == 0 and had_error is False:
         return True
     result = not had_error
     return result
 
 
 def get_author_info():
+    """Get the author details from the excel 
+    spread sheet and fills out the ACM author 
+    info in the LATEX document
+    Returns:
+        _type_: .tex
+    """
     # Load the Excel file
     excel_file = "Authors.xlsx"
     df = pd.read_excel(excel_file)
     all_authors = []
-
     # Iterate through rows
     for index, row in df.iterrows():
         # Check if the row has content
@@ -495,8 +489,8 @@ def make_acm_figure(name, i, tex_file, subdoc_captions, description):
         replace_line_with_pattern(
             tex_file, r"\\begin{fignos:no-prefix-figure-caption}", r"\begin{figure}"
         )
-    except Exception as e:
-        print(BOLD_RED, e, RESET)
+    except RuntimeError as begin_fig_error:
+        print(BOLD_RED,begin_fig_error, RESET)
         return False
     description = r"    \Description{" + description + "}"
     name = os.path.basename(name)
@@ -507,8 +501,8 @@ def make_acm_figure(name, i, tex_file, subdoc_captions, description):
         replace_line_with_pattern(
             tex_file, r"^\\includegraphics\[width=.*in,height=.*in\]{", replacement
         )
-    except Exception as e:
-        print(BOLD_RED, "Error adjusting \\includegraphics: ", e, RESET)
+    except RuntimeError as include_graph_error:
+        print(BOLD_RED, "Error adjusting \\includegraphics: ",include_graph_error, RESET)
         return False
     latex_caption = pypandoc.convert_file(
         subdoc_captions[i], TO_FORMAT, INPUT_FORMAT, extra_args=extra_args
@@ -547,8 +541,8 @@ def create_video_icons(tex_file):
                 unedited_line.decode("utf-8", "replace"),
                 modified_text.decode("utf-8", "replace")[:-1],
             )
-    except Exception as e:
-        print(BOLD_RED, e, RESET)
+    except SyntaxError as youtube_error:
+        print(BOLD_RED,youtube_error, RESET)
     try:
         modified_text, unedited_line = replace_youtube_link_with_command(
             tex_file, "Vimeo"
@@ -559,8 +553,8 @@ def create_video_icons(tex_file):
                 unedited_line.decode("utf-8", "replace"),
                 modified_text.decode("utf-8", "replace")[:-1],
             )
-    except Exception as e:
-        print(BOLD_RED, e, RESET)
+    except SyntaxError as vimeo_error:
+        print(BOLD_RED,vimeo_error, RESET)
 
 
 ######################### SHORT FUNCTIONS ############################
@@ -591,14 +585,14 @@ def get_original_image_names(docx_file):
                 refs.append(ref)
                 main_document_xml = doc.part.blob
                 root = etree.fromstring(main_document_xml)
-                search = ".//a:blip[@r:embed='{}']".format(rel)
+                search = f".//a:blip[@r:embed='{rel}']"
                 pic_elem = root.find(search, namespaces=namespaces)
                 if pic_elem is not None:
                     description = root.find(
 						".//pic:pic/pic:nvPicPr/pic:cNvPr", namespaces=namespaces
 					).get("descr")
                     image_alts.append(description)
-                search = ".//a:blip[@r:embed='{}']".format(next_rel)
+                search = f".//a:blip[@r:embed='{next_rel}']"
                 pic_elem = root.find(search, namespaces=namespaces)
                 if pic_elem is not None:
                     description = root.find(
@@ -606,20 +600,20 @@ def get_original_image_names(docx_file):
 					).get("descr")
                     image_alts.append(description)
 
-    except Exception as e:
-        print(BOLD_RED, "rel.values failed:", e, RESET)
+    except SyntaxError as rel_error:
+        print(BOLD_RED, "rel.values failed:", rel_error, RESET)
     try:
         all_rids = get_rid_order(docx_file)
-    except Exception as e:
-        print(BOLD_RED, "All rID's failed:", e, RESET)
+    except SyntaxError as rid_error:
+        print(BOLD_RED, "All rID's failed:", rid_error, RESET)
     try:
-        for rid in all_rids:
+        for rid in all_rids.copy():
             if rid in refs:
                 pass
             else:
                 all_rids.remove(rid)
-    except Exception as e:
-        print(BOLD_RED, "Fix all rID list failed:", e, RESET)
+    except SyntaxError as remove_rid_error:
+        print(BOLD_RED, "Fix all rID list failed:", remove_rid_error, RESET)
 
     # reordered_rids = sorted(refs, key=lambda x: all_rids.index(x))
     try:
@@ -635,15 +629,15 @@ def get_original_image_names(docx_file):
                 zip(refs, image_alts), key=lambda x: all_rids.index(x[0])
             )
         ]
-    except Exception as e:
-        print(BOLD_RED, "order_images Failed:", e, RESET)
+    except IndexError as sort_error:
+        print(BOLD_RED, "order_images Failed:", sort_error, RESET)
     return ordered_images, ordered_descriptions
 
 
-def increment_rel(rId_str, increment=1):
+def increment_rel(rid_str, increment=1):
     """Increments the rId string by the given number (Default is by 1)"""
     # Use regular expressions to find the number part of the string
-    match = re.search(r"\d+$", rId_str)
+    match = re.search(r"\d+$", rid_str)
 
     if match:
         # Extract the number from the matched group
@@ -651,10 +645,10 @@ def increment_rel(rId_str, increment=1):
         # Increment the number
         new_number = number + increment
         # Replace the number in the original string with the incremented number
-        return re.sub(r"\d+$", str(new_number), rId_str)
+        return re.sub(r"\d+$", str(new_number), rid_str)
 
     # If no number was found, return the original string
-    return rId_str
+    return rid_str
 
 
 def truncate_and_encode(input_string, max_length=30):
@@ -786,21 +780,21 @@ def get_rid_order(docx_file):
     try:
         # Parse the document XML using lxml
         root = etree.fromstring(doc.part.blob, parser=None)
-    except Exception as e:
-        print(BOLD_RED, "XML Parsing Failed:", e, RESET)
+    except SyntaxError as etree_error:
+        print(BOLD_RED, "XML Parsing Failed:", etree_error, RESET)
 
     try:
         # Register the 'w' namespace prefix
 
         # Find all w:drawing elements in the document.xml
         # drawing_elements = root.findall(".//w:drawing", namespaces=namespaces)
-        if root != None:
+        if root is not None:
             drawing_elements = root.findall(".//a:blip", namespaces=namespaces)
         else:
             print(BOLD_RED, "Get RID Order Failed: doc.part.blob.root is None", RESET)
 
-    except Exception as e:
-        print(BOLD_RED, "w:drawing search failed:", e, RESET)
+    except SyntaxError as draw_error:
+        print(BOLD_RED, "w:drawing search failed:", draw_error, RESET)
 
     # Retrieve the rId values in the order they appear in the document.xml
     rid_order = []
@@ -815,8 +809,8 @@ def get_rid_order(docx_file):
                     rid_order.append(r_id)
                 except KeyError:
                     print(BOLD_RED, "Failed to get image link:", KeyError, RESET)
-    except Exception as e:
-        print(BOLD_RED, "rid list failed with a non-key-error:", e)
+    except SyntaxError as attrib_error:
+        print(BOLD_RED, "rid list failed with a non-key-error:", attrib_error, RESET)
     return rid_order
 
 
@@ -961,7 +955,7 @@ def replace_youtube_link_with_command(tex_file_path, website):
 
         # return formatted_youtube_link, unedited_line
         return modified_bytes, unedited_bytes
-    except Exception as e:
+    except SyntaxError:
         return None, None
 
 def get_docx_files(directory):
@@ -986,6 +980,6 @@ for d in docx_files:
     try:
         GEN_RESULT = generate_tex(d)
         print("Finished Converting file:", d)
-    except Exception as e:
-        print("ERROR: Failed to convert", e)
+    except SyntaxError as temp_error:
+        print("ERROR: Failed to convert", temp_error)
 print("Finished converting all files")
